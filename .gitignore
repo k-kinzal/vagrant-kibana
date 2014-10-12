@@ -1,2 +1,5 @@
 .vagrant/
+config/.bigquery.v2.token
+config/.bigqueryrc
+config/.env
 Berksfile.lock
