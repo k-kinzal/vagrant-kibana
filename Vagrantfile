@@ -33,7 +33,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # your network.
   config.vm.network :public_network
 
-  # config.vm.provision "file", source: "./config/td-agent.conf", destination: "/etc/td-agent/td-agent.conf"
+  config.vm.provision "file", source: "./config/td-agent.conf", destination: "~/td-agent.conf"
+  config.vm.provision "file", source: "./config/.env", destination: "~/.env"
   config.vm.provision "file", source: "./config/.bigqueryrc", destination: "~/.bigqueryrc"
   config.vm.provision "file", source: "./config/.bigquery.v2.token", destination: "~/.bigquery.v2.token"
 
@@ -113,6 +114,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         "recipe[elasticsearch]",
         "recipe[elasticsearch::plugins]",
         "recipe[td-agent]",
+        "recipe[awscli]",
         "recipe[selinux::disabled]",
         "recipe[iptables::disabled]"
     ]
@@ -130,54 +132,33 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # TODO: install kibana 4.0 beta
   config.vm.provision :shell, :inline => <<-EOS
     which kibana | grep "/usr/bin/kibana" || (
-      sudo mkdir -p /opt/kibana && cd /opt/kibana && sudo curl -sSO https://download.elasticsearch.org/kibana/kibana/kibana-4.0.0-BETA1.1.zip && sudo unzip kibana-4.0.0-BETA1.1.zip && cd ./kibana-4.0.0-BETA1.1 && (sudo ./bin/kibana >/dev/null 2>&1 &) && sudo ln -s /opt/kibana/kibana-4.0.0-BETA1/bin/kibana /usr/bin/kibana)
+      sudo mkdir -p /opt/kibana && cd /opt/kibana && sudo curl -sSO https://download.elasticsearch.org/kibana/kibana/kibana-4.0.0-BETA1.1.zip && sudo unzip kibana-4.0.0-BETA1.1.zip && cd ./kibana-4.0.0-BETA1.1 && sudo ln -s /opt/kibana/kibana-4.0.0-BETA1.1/bin/kibana /usr/bin/kibana)
+  EOS
+
+  # TODO: install jq
+  config.vm.provision :shell, :inline => <<-EOS
+    which jq | grep "/usr/bin/jq" || sudo yum install -y jq
   EOS
 
   config.vm.provision :shell, :inline => <<-EOS
-    echo '
-####
-## Output descriptions:
-##
-<match **>
-  type elasticsearch
-  type_name fluentd
-  include_tag_key true
-  tag_key @log_name
-  host localhost
-  port 9200
-  logstash_format true
-  flush_interval 10s
-</match>
-
-####
-## Source descriptions:
-##
-
-## built-in TCP input
-## @see http://docs.fluentd.org/articles/in_forward
-<source>
-  type forward
-  port 24224
-  bind 0.0.0.0
-</source>
-
-## built-in UNIX socket input
-#<source>
-#  type unix
-#</source>
-
-
-## live debugging agent
-<source>
-  type debug_agent
-  bind 127.0.0.1
-  port 24230
-</source>
-    ' | sudo tee /etc/td-agent/td-agent.conf
-  EOS
-
-  config.vm.provision :shell, :inline => <<-EOS
+    sudo sed -i -e's/--user td-agent/--user root/' /etc/init.d/td-agent
+    sudo sed -i -e's/--group td-agent/--group root/' /etc/init.d/td-agent
+    sudo cp /home/vagrant/td-agent.conf /etc/td-agent/td-agent.conf
+    sudo cp /home/vagrant/.env /etc/profile.d/env.sh
+    sudo cp /home/vagrant/.bigquery.v2.token /root/.bigquery.v2.token
+    sudo cp /home/vagrant/.bigqueryrc /root/.bigqueryrc
     sudo service elasticsearch restart
     sudo service td-agent restart
+    sudo pkill -f '/usr/bin/java -Xmx512m -jar /opt/kibana/kibana-4.0.0-BETA1.1/bin/../lib/kibana.jar'
+    sudo /usr/bin/kibana >/dev/null 2>&1 &
   EOS
+  
+  config.vm.provision :shell, :inline => <<-EOS
+    sudo mkdir -p /root/.aws/
+    echo "[default]
+region = $AWS_DEFAULT_REGION
+aws_access_key_id = $AWS_ACCESS_KEY_ID
+aws_secret_access_key = $AWS_SECRET_ACCESS_KEY" | sudo tee /root/.aws/config
+  EOS
+
 end
