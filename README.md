@@ -24,13 +24,15 @@ vagrant up
 create bigquery token file ```config/.bigqueryrc``` and ```config/.bigquery.v2.token```.
 https://pypi.python.org/pypi/bigquery/2.0.17
 
+**Only root user**
 
-## Use Cloudwatch log
+
+## Use AWS CLI
 
 your write to ```config/.env```.
 
 ```
-export AWS_REGION="[region]"
+export AWS_DEFAULT_REGION="[region]"
 export AWS_ACCESS_KEY_ID="[access key]"
 export AWS_SECRET_ACCESS_KEY="[secret key]"
 ```
